@@ -1,3 +1,7 @@
+## Video Demo
+
+【[UE插件] 如何找到未使用资产？资产关系分析工具】 https://www.bilibili.com/video/BV1WrL66hE2F/?share_source=copy_web&vd_source=7c0f429dfce391615f0c93741056b2e9
+
 # AssetInsight
 
 AssetInsight is an Unreal Engine plugin that provides three main features:
