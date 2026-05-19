@@ -53,8 +53,64 @@ FAssetAnalysisResult FReferencerAnalyzer::BuildReferencerTree(
 	RootNode->bEditorOnly = Info.bEditorOnly;
 	RootNode->bBuild = Info.bBuild;
 
+	TSet<FName> CurrentPath;
+	CurrentPath.Add(InRootAsset.PackageName);
+
 	TSet<FName> UniqueSet;
 	UniqueSet.Add(InRootAsset.PackageName);
+
+	TSet<FName> ExpandedSet;
+	BuildTreeRecursive(
+		Registry,
+		InRootAsset.PackageName,
+		RootNode,
+		CurrentPath,
+		UniqueSet,
+		ExpandedSet,
+		Summary,
+		Options,
+		0,
+		MaxDepth
+	);
+
+	Result.RootNode = RootNode;
+	Result.Summary = Summary;
+
+	return Result;
+}
+
+void FReferencerAnalyzer::BuildTreeRecursive(
+	IAssetRegistry& Registry,
+	const FName& CurrentPackage,
+	TSharedPtr<FAssetTreeNode> CurrentNode,
+	TSet<FName>& CurrentPath,
+	TSet<FName>& UniqueSet,
+	TSet<FName>& ExpandedSet,
+	FAssetAnalysisSummary& Summary,
+	const FAssetReferencerTreeOptions& Options,
+	int32 CurrentDepth,
+	int32 MaxDepth
+)
+{
+	if (!CurrentNode.IsValid())
+	{
+		return;
+	}
+
+	if (CurrentDepth >= MaxDepth)
+	{
+		CurrentNode->bIsDepthLimited = true;
+		Summary.DepthLimitedCount++;
+		Summary.bDepthLimited = true;
+		return;
+	}
+
+	if (ExpandedSet.Contains(CurrentPackage))
+	{
+		CurrentNode->bAlreadyVisited = true;
+		return;
+	}
+	ExpandedSet.Add(CurrentPackage);
 
 	TArray<FAssetDependency> PackageReferencers;
 	TArray<FAssetDependency> ManageReferencers;
@@ -69,42 +125,93 @@ FAssetAnalysisResult FReferencerAnalyzer::BuildReferencerTree(
 
 		GetReferencersByCategory(
 			Registry,
-			InRootAsset.PackageName,
+			CurrentPackage,
 			UE::AssetRegistry::EDependencyCategory::Package,
 			PackageQuery,
 			PackageReferencers
 		);
-		AddReferencerChildren(Registry, RootNode, PackageReferencers, EAssetReferencerCategory::Package, UniqueSet, Summary);
+
+		for (const FAssetDependency& Ref : PackageReferencers)
+		{
+			const FName RefPackage = Ref.AssetId.PackageName;
+
+			TSharedPtr<FAssetTreeNode> ChildNode = MakeShared<FAssetTreeNode>();
+			ChildNode->PackageName = RefPackage;
+			ChildNode->DisplayName = BuildDisplayName(Registry, RefPackage);
+			ChildNode->ReferencerCategory = EAssetReferencerCategory::Package;
+			ApplyPackageReferencerProperties(Ref, ChildNode);
+
+			CurrentNode->Children.Add(ChildNode);
+			Summary.ExpandedNodeCount++;
+
+			if (!UniqueSet.Contains(RefPackage))
+			{
+				UniqueSet.Add(RefPackage);
+				Summary.UniqueNodeCount++;
+
+				if (RefPackage.ToString().StartsWith(TEXT("/Engine")))
+				{
+					Summary.EngineAssetCount++;
+				}
+				else
+				{
+					Summary.ProjectAssetCount++;
+				}
+			}
+
+			if (CurrentPath.Contains(RefPackage))
+			{
+				ChildNode->bIsCycle = true;
+				Summary.CycleCount++;
+				continue;
+			}
+
+			if (ExpandedSet.Contains(RefPackage))
+			{
+				ChildNode->bAlreadyVisited = true;
+				continue;
+			}
+
+			CurrentPath.Add(RefPackage);
+			BuildTreeRecursive(
+				Registry,
+				RefPackage,
+				ChildNode,
+				CurrentPath,
+				UniqueSet,
+				ExpandedSet,
+				Summary,
+				Options,
+				CurrentDepth + 1,
+				MaxDepth
+			);
+			CurrentPath.Remove(RefPackage);
+		}
 	}
 
 	if (Options.bShowManageReferencers)
 	{
 		GetReferencersByCategory(
 			Registry,
-			InRootAsset.PackageName,
+			CurrentPackage,
 			UE::AssetRegistry::EDependencyCategory::Manage,
 			UE::AssetRegistry::FDependencyQuery(),
 			ManageReferencers
 		);
-		AddReferencerChildren(Registry, RootNode, ManageReferencers, EAssetReferencerCategory::Manage, UniqueSet, Summary);
+		AddReferencerChildren(Registry, CurrentNode, ManageReferencers, EAssetReferencerCategory::Manage, UniqueSet, Summary);
 	}
 
 	if (Options.bShowSemanticReferencers)
 	{
 		GetReferencersByCategory(
 			Registry,
-			InRootAsset.PackageName,
+			CurrentPackage,
 			UE::AssetRegistry::EDependencyCategory::SearchableName,
 			UE::AssetRegistry::FDependencyQuery(),
 			SemanticReferencers
 		);
-		AddReferencerChildren(Registry, RootNode, SemanticReferencers, EAssetReferencerCategory::Semantic, UniqueSet, Summary);
+		AddReferencerChildren(Registry, CurrentNode, SemanticReferencers, EAssetReferencerCategory::Semantic, UniqueSet, Summary);
 	}
-
-	Result.RootNode = RootNode;
-	Result.Summary = Summary;
-
-	return Result;
 }
 
 FAssetReferencerInfo FReferencerAnalyzer::BuildReferencerInfo(

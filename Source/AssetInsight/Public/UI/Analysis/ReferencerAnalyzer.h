@@ -29,6 +29,19 @@ public:
 
 private:
 
+	static void BuildTreeRecursive(
+		class IAssetRegistry& Registry,
+		const FName& CurrentPackage,
+		TSharedPtr<FAssetTreeNode> CurrentNode,
+		TSet<FName>& CurrentPath,
+		TSet<FName>& UniqueSet,
+		TSet<FName>& ExpandedSet,
+		FAssetAnalysisSummary& Summary,
+		const FAssetReferencerTreeOptions& Options,
+		int32 CurrentDepth,
+		int32 MaxDepth
+	);
+
 	static FAssetReferencerInfo BuildReferencerInfo(
 		class IAssetRegistry& Registry,
 		const FName& PackageName,

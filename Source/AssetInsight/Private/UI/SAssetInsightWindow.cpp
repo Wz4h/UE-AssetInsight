@@ -122,7 +122,18 @@ namespace
 			Out += FieldPad + FString::Printf(TEXT("\"bSoft\": %s,\n"), Child->bSoft ? TEXT("true") : TEXT("false"));
 			Out += FieldPad + FString::Printf(TEXT("\"bGame\": %s,\n"), Child->bGame ? TEXT("true") : TEXT("false"));
 			Out += FieldPad + FString::Printf(TEXT("\"bEditorOnly\": %s,\n"), Child->bEditorOnly ? TEXT("true") : TEXT("false"));
-			Out += FieldPad + FString::Printf(TEXT("\"bBuild\": %s\n"), Child->bBuild ? TEXT("true") : TEXT("false"));
+			Out += FieldPad + FString::Printf(TEXT("\"bBuild\": %s,\n"), Child->bBuild ? TEXT("true") : TEXT("false"));
+			Out += FieldPad + TEXT("\"Referencers\": [\n");
+			for (int32 ChildIndex = 0; ChildIndex < Child->Children.Num(); ++ChildIndex)
+			{
+				AppendReferencerJsonNode(Child->Children[ChildIndex], Out, Indent + 4);
+				if (ChildIndex + 1 < Child->Children.Num())
+				{
+					Out += TEXT(",");
+				}
+				Out += TEXT("\n");
+			}
+			Out += FieldPad + TEXT("]\n");
 			Out += ItemPad + TEXT("}");
 			if (Index + 1 < Node->Children.Num())
 			{
@@ -201,6 +212,7 @@ namespace
 				Child->bGame ? 1 : 0,
 				Child->bEditorOnly ? 1 : 0,
 				Child->bBuild ? 1 : 0);
+			AppendReferencerCsvRows(Child, Out);
 		}
 	}
 }
